@@ -40,17 +40,32 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         panic!("No records found!");
     }
 
-    let end = money(&records[0].balance);
-    let last = records.last().unwrap();
-    let start = money(&last.balance) + money(&last.amount);
+    // Since transit-pass-related transactions record a balance of 0, we need
+    // to look for the non-zero balances to get our true start and end balances.
+    let mut non_zero_balance_iter = records.iter().filter(|rec| money(&rec.balance) != 0.0);
+    let first = non_zero_balance_iter.next();
+    let last = non_zero_balance_iter.last();
+
+    let mut end = 0.0;
+    let mut start = 0.0;
+    if let Some(rec) = first { end = money(&rec.balance) }
+    if let Some(rec) = last { start = money(&rec.balance) + money(&rec.amount) }
+
+    let mut transit_uses = 0;
     println!("Loads:");
     let mut loads = 0.0;
     for record in records.iter() {
-        if record.ty != "Load Amount" {
+        if record.ty == "Transit Pass Payment" {
+            transit_uses += 1;
+            continue
+        } else if record.ty != "Load Amount" && record.ty != "Load Transit Pass" {
             continue
         }
         loads += money(&record.amount);
         println!("\t{} on {}", record.amount, record.date);
+    }
+    if transit_uses > 0 {
+        println!("Transit pass(es) used {} times.", transit_uses);
     }
     println!("Total spent: ${:.2}", end + loads - start);
     Ok(())
